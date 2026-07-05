@@ -18,7 +18,7 @@ constexpr int FRAME_SAMPLES = SAMPLE_RATE_HZ * FRAME_MS / 1000;  // 320
 
 enum Type : uint8_t { AUDIO = 1, CONTROL = 2, TEXT_ACK = 3 };
 enum Flag : uint8_t { CAPTURING = 0x01 };
-enum Ctrl : uint8_t { CAPTURE_START = 1, CAPTURE_STOP = 2, PING = 3, PONG = 4 };
+enum Ctrl : uint8_t { CTRL_CAPTURE_START = 1, CTRL_CAPTURE_STOP = 2, CTRL_PING = 3, CTRL_PONG = 4 };
 
 struct Header {
   uint8_t  version;
