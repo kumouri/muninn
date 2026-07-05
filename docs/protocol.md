@@ -17,7 +17,7 @@ protocol.py`) must match it byte-for-byte. Change both together and bump `PROTOC
    0      2    magic          ASCII 'M','N'  (0x4D 0x4E)
    2      1    version        PROTOCOL_VERSION (currently 1)
    3      1    type           1=AUDIO  2=CONTROL  3=TEXT_ACK
-   4      1    flags          bit0 = CAPTURING (this audio is inside a capture)
+   4      1    flags          bit0 = CAPTURING (inside a capture); bit1 = STEREO (see below)
    5      1    reserved       0 (reserved for a future header checksum)
    6      4    seq            uint32, monotonically increasing per frame
   10      4    timestamp_ms   uint32, device uptime in milliseconds
@@ -31,7 +31,7 @@ Header is a fixed **16 bytes**; total frame size is `16 + payload_len`.
 
 | type | name | direction | payload |
 |-----:|------|-----------|---------|
-| `1` | `AUDIO` | device → listener | `payload_len` bytes of `s16le` PCM (`sample_count = payload_len / 2`) |
+| `1` | `AUDIO` | device → listener | `s16le` PCM. Mono by default; if the `STEREO` flag is set, interleaved stereo `L,R` (L=program, R=your voice) for diarization |
 | `2` | `CONTROL` | either | 1 byte control code (see below) |
 | `3` | `TEXT_ACK` | listener → device | UTF-8 text of the finished transcript segment |
 
@@ -78,6 +78,7 @@ TYPE_CONTROL  = 2
 TYPE_TEXT_ACK = 3
 
 FLAG_CAPTURING = 0x01
+FLAG_STEREO    = 0x02    # AUDIO payload is interleaved stereo (L=program, R=voice)
 
 CTRL_CAPTURE_START = 0x01
 CTRL_CAPTURE_STOP  = 0x02

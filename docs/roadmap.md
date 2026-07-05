@@ -39,14 +39,19 @@ remote-control path build in CI; on-hardware verification waits on the PCM1808.
 - **Voice-activated capture** (`muninn_vad::Vad`): an energy gate with hangover auto-starts/stops
   capture from the voice channel. Selectable via `MUNINN_CAPTURE_MODE` (button / VAD / both).
 
-## M3b — Channel-based diarization (listener)
+## M3b — Channel-based diarization ✅ (code; pending hardware bring-up)
 
-Muninn already has the two speakers on separate input channels (program vs your voice), so it can
-label the transcript **without a diarization model**: stream stereo, and attribute each whisper
-segment to the channel that was louder during it ("You" / "Program" / "Both"). Adds a `FLAG_STEREO`
-audio mode, a per-channel energy timeline in the listener, timestamped whisper segments, and a
-`fake_device --stereo` mode so it's testable with no hardware. (A model-based pass, e.g. pyannote,
-remains a future option for single-channel sources.)
+Muninn has the two speakers on separate input channels (program vs your voice), so it labels the
+transcript **without a diarization model**: attribute each whisper segment to the channel that was
+louder during it ("You" / "Program" / "Both").
+
+- Protocol `FLAG_STEREO` + firmware `MUNINN_STEREO_TAP` (`env:esp32-s3-stereo`) stream interleaved
+  program (L) + voice (R) at 16 kHz (`dsp::downsample_48k_to_16k_stereo`).
+- Listener keeps L/R per capture, downmixes for whisper, and `diarize.label_segments` attributes
+  each timestamped segment; the transcript is written as a labeled script.
+- `fake_device --stereo` streams a stereo WAV, so the whole path is tested with no hardware.
+
+A model-based pass (e.g. pyannote) remains a future option for single-channel sources.
 
 ## M3c — Enclosure & polish
 

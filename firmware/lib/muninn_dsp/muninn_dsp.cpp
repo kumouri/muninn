@@ -77,4 +77,20 @@ size_t downsample_48k_to_16k(const int16_t* in, size_t in_frames, int channels,
   return written;
 }
 
+size_t downsample_48k_to_16k_stereo(const int16_t* in, size_t in_frames, int16_t* out,
+                                    size_t out_cap) {
+  const size_t groups = in_frames / 3;  // 48000 / 16000 = 3
+  size_t w = 0;
+  for (size_t g = 0; g < groups; ++g) {
+    if (w + 2 > out_cap) break;
+    for (int ch = 0; ch < 2; ++ch) {
+      const int32_t s0 = in[(g * 3 + 0) * 2 + ch];
+      const int32_t s1 = in[(g * 3 + 1) * 2 + ch];
+      const int32_t s2 = in[(g * 3 + 2) * 2 + ch];
+      out[w++] = static_cast<int16_t>((s0 + s1 + s2) / 3);
+    }
+  }
+  return w;
+}
+
 }  // namespace muninn::dsp

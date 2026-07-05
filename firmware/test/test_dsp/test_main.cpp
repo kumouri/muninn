@@ -76,6 +76,16 @@ void test_mix_to_mono_clamps() {
   TEST_ASSERT_EQUAL_INT16(32767, out[0]);
 }
 
+void test_downsample_stereo_keeps_channels_separate() {
+  // 3 stereo frames -> 1 stereo output frame (2 samples). L=100 const, R=900 const.
+  const int16_t in[] = {100, 900, 100, 900, 100, 900};
+  int16_t out[4] = {0};
+  size_t n = downsample_48k_to_16k_stereo(in, 3, out, 4);
+  TEST_ASSERT_EQUAL_UINT(2, n);
+  TEST_ASSERT_EQUAL_INT16(100, out[0]);  // L
+  TEST_ASSERT_EQUAL_INT16(900, out[1]);  // R
+}
+
 void test_measure_levels_stereo_peaks() {
   // two stereo frames: ch0 peaks at 500, ch1 peaks at -900 -> |900|
   const int16_t in[] = {100, -200, 500, -900};
@@ -116,5 +126,6 @@ int main(int, char**) {
   RUN_TEST(test_measure_levels_stereo_peaks);
   RUN_TEST(test_measure_levels_clip_flag);
   RUN_TEST(test_measure_levels_handles_int16_min);
+  RUN_TEST(test_downsample_stereo_keeps_channels_separate);
   return UNITY_END();
 }

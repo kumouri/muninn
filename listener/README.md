@@ -52,6 +52,20 @@ python -m muninn_listener --transport tcp --port 5140 --mock
 python tools/fake_device.py --transport tcp --port 5140 sample.wav
 ```
 
+### Diarization — "You" vs "Program" (M3b)
+
+If the device streams stereo (program on L, your voice on R — firmware `MUNINN_STEREO_TAP`, or
+`fake_device --stereo`), the listener labels each transcript segment by the louder channel:
+
+```bash
+# stereo WAV: left = program, right = your voice
+python -m muninn_listener --transport tcp --port 5140 --mock
+python tools/fake_device.py --transport tcp --port 5140 --stereo session.wav
+```
+
+The transcript is written as a labeled script (`**You:** …` / `**Program:** …`). No diarization model
+is used — attribution is purely by input channel.
+
 ## whisper.cpp setup
 
 The default runner shells out to a whisper.cpp CLI binary. Build it from

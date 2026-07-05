@@ -1,3 +1,4 @@
+import array
 import wave
 from io import BytesIO
 
@@ -8,6 +9,15 @@ from muninn_listener.assembler import SegmentBuilder
 def _audio(seq, pcm, capturing=True):
     flags = p.FLAG_CAPTURING if capturing else 0
     raw = p.encode(p.TYPE_AUDIO, flags, seq, seq, pcm)
+    return p.FrameParser().feed(raw)[0]
+
+
+def _stereo_audio(seq, left, right):
+    inter = array.array("h")
+    for lft, rgt in zip(left, right):
+        inter.append(lft)
+        inter.append(rgt)
+    raw = p.encode(p.TYPE_AUDIO, p.FLAG_CAPTURING | p.FLAG_STEREO, seq, seq, inter.tobytes())
     return p.FrameParser().feed(raw)[0]
 
 
@@ -37,6 +47,18 @@ def test_segment_bounded_by_capturing_flag():
 def test_non_capturing_audio_is_ignored():
     b = SegmentBuilder()
     assert b.push(_audio(1, b"\x00\x00", capturing=False)) is None
+
+
+def test_stereo_segment_keeps_channels_and_downmixes():
+    b = SegmentBuilder()
+    b.push(_control(p.CTRL_CAPTURE_START))
+    b.push(_stereo_audio(1, left=[100, 100], right=[300, 300]))
+    seg = b.push(_control(p.CTRL_CAPTURE_STOP))
+    assert seg is not None
+    assert seg.is_stereo
+    assert seg.left == array.array("h", [100, 100]).tobytes()
+    assert seg.right == array.array("h", [300, 300]).tobytes()
+    assert seg.pcm == array.array("h", [200, 200]).tobytes()  # (L+R)/2 mono for whisper
 
 
 def test_segment_wav_is_16k_mono_s16():

@@ -35,6 +35,13 @@ size_t downsample_48k_to_16k(const int16_t* in, size_t in_frames, int channels,
 size_t downmix_to_mono(const int16_t* in, size_t in_frames, int channels, int16_t* out,
                        size_t out_cap);
 
+// Decimate interleaved 48 kHz *stereo* -> interleaved 16 kHz stereo (each channel filtered
+// independently, 3-tap average). Used for the diarization tap, which keeps program (L) and voice
+// (R) separate. `out_cap` is in samples (interleaved). Returns interleaved samples written
+// (= 2 * groups). Input must be 2-channel interleaved.
+size_t downsample_48k_to_16k_stereo(const int16_t* in, size_t in_frames, int16_t* out,
+                                    size_t out_cap);
+
 // Mix interleaved int16 PCM to mono with per-channel gain, so a program tap and your voice bus can
 // be balanced. Gains are Q8 fixed point (256 = unity, 128 = -6 dB). Channel 0 uses g0, channel 1
 // uses g1; any further channels are ignored (line-in is stereo). Output is clamped to int16.

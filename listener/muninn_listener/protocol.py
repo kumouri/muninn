@@ -25,6 +25,7 @@ TYPE_TEXT_ACK = 3
 
 # Flags
 FLAG_CAPTURING = 0x01
+FLAG_STEREO = 0x02  # AUDIO payload is interleaved stereo s16 (L=program, R=voice) for diarization
 
 # Control codes
 CTRL_CAPTURE_START = 0x01
@@ -48,6 +49,10 @@ class Frame:
     @property
     def capturing(self) -> bool:
         return bool(self.flags & FLAG_CAPTURING)
+
+    @property
+    def stereo(self) -> bool:
+        return bool(self.flags & FLAG_STEREO)
 
 
 def encode(

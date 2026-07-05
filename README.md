@@ -43,6 +43,11 @@ mixer ─┬─▶ your monitoring (wired / 1Mii B03 → BT)      ← unchanged
 | **Capture** | A **button** on the device (or a PC hotkey) marks what to transcribe |
 | **Transcribe** | The **Python listener** runs whisper.cpp and writes Markdown transcripts |
 
+Optionally stream **stereo** (program + your voice on separate channels) and the listener labels
+the transcript **"You" vs "Program"** by input channel — no diarization model needed. Capture can be
+triggered by the device **button**, a **PC hotkey**, or **voice activity (VAD)**; the status LED is a
+one-pixel VU meter.
+
 The audio front-end is **pluggable** (`firmware/src/audio/AudioSource`) — the wire protocol,
 transports, capture logic, and the entire listener are independent of it. See
 [`docs/architecture.md`](docs/architecture.md) and [`docs/roadmap.md`](docs/roadmap.md).
