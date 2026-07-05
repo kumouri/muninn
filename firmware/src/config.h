@@ -45,3 +45,7 @@
 #define MUNINN_TRANSPORT MUNINN_TRANSPORT_USB_CDC
 #endif
 #define MUNINN_LISTENER_TCP_PORT 5140
+// Listener host for the Wi-Fi transport. Override in src/secrets.h (see .example).
+#ifndef MUNINN_LISTENER_HOST
+#define MUNINN_LISTENER_HOST "192.168.1.50"
+#endif

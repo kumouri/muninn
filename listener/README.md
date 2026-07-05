@@ -27,6 +27,20 @@ python -m muninn_listener --transport usb --serial-port COM7 \
 python -m muninn_listener --transport tcp --mock
 ```
 
+### Trigger capture from the PC (M2)
+
+The device honors `CONTROL` frames from the listener, so you can toggle capture without touching the
+button:
+
+```bash
+# Press Enter to start/stop (portable, no deps)
+python -m muninn_listener --transport tcp --hotkey stdin
+
+# A real global hotkey (needs the keyboard package; may require elevated privileges)
+pip install "muninn-listener[hotkey]"
+python -m muninn_listener --transport tcp --hotkey global --hotkey-combo ctrl+alt+m
+```
+
 Transcripts are written to `./transcripts/<YYYY-MM-DD_HHMMSS>.md`.
 
 ## Test without hardware

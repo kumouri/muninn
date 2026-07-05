@@ -32,9 +32,9 @@ jobs:
       - name: Host unit tests (DSP + protocol)
         working-directory: firmware
         run: pio test -e native
-      - name: Build v1 firmware (ESP32-S3)
+      - name: Build firmware (ESP32-S3, USB + Wi-Fi/SD transports)
         working-directory: firmware
-        run: pio run -e esp32-s3
+        run: pio run -e esp32-s3 -e esp32-s3-wifi
 
   listener:
     name: listener (Python)

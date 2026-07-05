@@ -48,6 +48,11 @@ The `CAPTURING` flag on `AUDIO` frames is the ground truth for which samples bel
 `CAPTURE_START`/`CAPTURE_STOP` are explicit segment boundaries so the listener can finalize promptly
 even if the last audio frame was dropped on a lossy transport.
 
+**Remote capture (M2).** `CONTROL` is bidirectional. The device sends `CAPTURE_START`/`STOP` when its
+button is pressed, and it also *honors* those codes when they arrive **from** the listener — so a PC
+hotkey (`muninn_listener --hotkey`) can toggle capture over the same connection. To avoid echo loops,
+the device does not re-announce a capture change that a listener initiated.
+
 ## Framing notes
 
 - **USB-CDC and TCP are reliable, ordered byte streams** — the decoder resynchronizes by scanning for

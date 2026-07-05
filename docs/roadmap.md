@@ -19,11 +19,18 @@ loopback harness, CI. The listener + `fake_device.py` produce a real transcript 
 Exit criteria: feed a mixer tap + voice, press capture, get a correct transcript that includes your
 own voice. You keep monitoring through your own headphones / 1Mii B03 — Muninn never touches it.
 
-## M2 — Wireless transport + on-board buffer + PC trigger
+## M2 — Wireless transport + on-board buffer + PC trigger ✅ (code; pending hardware bring-up)
 
-- **Wi-Fi TCP** transport so the listener PC needn't be the USB host.
-- **SD store-and-forward**: buffer 16 kHz WAV segments on-device, upload when a listener is reachable.
-- PC-side **global hotkey** to trigger capture without reaching for the device.
+- **Wi-Fi TCP** transport (`env:esp32-s3-wifi`) so the listener PC needn't be the USB host, with
+  throttled reconnect.
+- **SD store-and-forward** (`StoreAndForwardTransport` + `SdStore`): when the primary link is down,
+  frames are buffered to the SD card and replayed in order once it recovers.
+- PC-side **capture trigger** (`--hotkey stdin|global`): the listener sends `CONTROL` frames back to
+  the device, which honors inbound `CAPTURE_START`/`STOP` (`handleInbound`) — capture without
+  reaching for the button.
+
+Transport is chosen at build time via `MUNINN_TRANSPORT` in `config.h`. All three transports and the
+remote-control path build in CI; on-hardware verification waits on the PCM1808.
 
 ## M3 — Capture quality & ergonomics
 
