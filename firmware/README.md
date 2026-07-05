@@ -22,6 +22,9 @@ status LED doubles as a one-pixel VU meter (`MUNINN_METER_ENABLE`), flashing red
 Set `MUNINN_STEREO_TAP=1` (`env:esp32-s3-stereo`) to stream program (L) + voice (R) separately so the
 listener can label "You" vs "Program"; the default mixes them to mono (half the bandwidth).
 
+The device also sends per-channel `METER` frames every `MUNINN_METER_REPORT_MS` (0 = off); run the
+listener with `--meter` for a live VU meter to set levels before recording.
+
 ## Build & test
 
 ```bash

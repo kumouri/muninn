@@ -45,6 +45,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="PC-side capture toggle: 'stdin' (press Enter), 'global' (needs the keyboard package)",
     )
     ap.add_argument("--hotkey-combo", default="ctrl+alt+m", help="key combo for --hotkey global")
+
+    ap.add_argument("--meter", action="store_true", help="show a live per-channel level meter")
     return ap
 
 
@@ -62,7 +64,14 @@ def _start_hotkey(args, link) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     runner = build_runner(args)
-    pipeline = Pipeline(runner, out_dir=args.out)
+
+    on_meter = None
+    if args.meter:
+        from .meter import MeterDisplay
+
+        on_meter = MeterDisplay().update
+
+    pipeline = Pipeline(runner, out_dir=args.out, on_meter=on_meter)
 
     link = None
     if args.hotkey != "off":

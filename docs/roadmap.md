@@ -53,9 +53,13 @@ louder during it ("You" / "Program" / "Both").
 
 A model-based pass (e.g. pyannote) remains a future option for single-channel sources.
 
-## M3c — Enclosure & polish
+## M3c — Meter UI + enclosure ✅ (code; pending hardware bring-up)
 
-Enclosure/wearable form factor; per-channel meter readout surfaced to the listener UI.
+- **Per-channel meter to the listener UI**: the device sends `TYPE_METER` frames periodically
+  (`MUNINN_METER_REPORT_MS`) with program/voice peaks + clip; `muninn_listener --meter` shows a live
+  two-channel terminal VU meter so you can set levels before recording.
+- **Enclosure**: a parametric two-part OpenSCAD case with panel cutouts (USB-C, 2× 3.5 mm jacks,
+  button, LED pipe) — `hardware/enclosure/muninn_case.scad` + [`hardware/ENCLOSURE.md`](../hardware/ENCLOSURE.md).
 
 ## M4 — Alternate front-ends (optional)
 

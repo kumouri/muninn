@@ -40,6 +40,10 @@
 #define MUNINN_METER_ENABLE 1
 #define MUNINN_METER_FULL_SCALE 6000   // peak that maps to full LED brightness
 #define MUNINN_CLIP_THRESHOLD 32000    // |sample| >= this counts as clipping
+// Send per-channel level to the listener UI every N ms (M3c). 0 = off.
+#ifndef MUNINN_METER_REPORT_MS
+#define MUNINN_METER_REPORT_MS 100
+#endif
 
 // ── Capture trigger mode ────────────────────────────────────────────────────────
 #define MUNINN_CAPTURE_BUTTON 0

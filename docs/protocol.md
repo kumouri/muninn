@@ -34,6 +34,7 @@ Header is a fixed **16 bytes**; total frame size is `16 + payload_len`.
 | `1` | `AUDIO` | device → listener | `s16le` PCM. Mono by default; if the `STEREO` flag is set, interleaved stereo `L,R` (L=program, R=your voice) for diarization |
 | `2` | `CONTROL` | either | 1 byte control code (see below) |
 | `3` | `TEXT_ACK` | listener → device | UTF-8 text of the finished transcript segment |
+| `4` | `METER` | device → listener | 5 bytes: `peak_L` (u16), `peak_R` (u16), `clip` (u8: bit0=L, bit1=R). Sent periodically for the UI level meter |
 
 ### Control codes (type = 2)
 

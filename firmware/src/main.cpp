@@ -42,8 +42,12 @@ CRGB g_led[1];
 
 // Tap pipeline state.
 volatile bool g_capturing = false;
-volatile int16_t g_peak = 0;      // latest input peak, for the LED VU meter
-volatile bool g_clip = false;     // latest clip state
+volatile int16_t g_peak = 0;      // latest input peak (max of channels), for the LED VU meter
+volatile bool g_clip = false;     // latest clip state (either channel)
+volatile int16_t g_peak_l = 0;    // per-channel peaks for the listener meter (program / voice)
+volatile int16_t g_peak_r = 0;
+volatile bool g_clip_l = false;
+volatile bool g_clip_r = false;
 volatile uint8_t g_vad_req = 0;   // 0 none, 1 start, 2 stop (produced in onTap, applied in loop)
 uint32_t g_seq = 0;
 #if MUNINN_STEREO_TAP
@@ -63,6 +67,18 @@ size_t g_inlen = 0;
 void sendControl(uint8_t code) {
   uint8_t buf[proto::HEADER_SIZE + 1];
   size_t n = proto::encode(buf, sizeof(buf), proto::CONTROL, 0, g_seq++, millis(), &code, 1);
+  if (n) g_transport.sendFrame(buf, n);
+}
+
+// Per-channel level for the listener UI meter: peak_L(u16), peak_R(u16), clip(u8: bit0 L, bit1 R).
+void sendMeter() {
+  const uint16_t pl = static_cast<uint16_t>(g_peak_l);
+  const uint16_t pr = static_cast<uint16_t>(g_peak_r);
+  uint8_t p[5] = {static_cast<uint8_t>(pl & 0xFF), static_cast<uint8_t>(pl >> 8),
+                  static_cast<uint8_t>(pr & 0xFF), static_cast<uint8_t>(pr >> 8),
+                  static_cast<uint8_t>((g_clip_l ? 0x01 : 0) | (g_clip_r ? 0x02 : 0))};
+  uint8_t buf[proto::HEADER_SIZE + sizeof(p)];
+  size_t n = proto::encode(buf, sizeof(buf), proto::METER, 0, g_seq++, millis(), p, sizeof(p));
   if (n) g_transport.sendFrame(buf, n);
 }
 
@@ -110,6 +126,10 @@ void flushAudioFrame() {
 void onTap(const int16_t* interleaved, size_t frames, int channels, void*) {
   // Metering + VAD run on the raw stereo (program on ch0, your voice on ch1).
   dsp::Levels lv = dsp::measure_levels(interleaved, frames, channels, MUNINN_CLIP_THRESHOLD);
+  g_peak_l = lv.peak[0];
+  g_peak_r = lv.peak[1];
+  g_clip_l = lv.clip[0];
+  g_clip_r = lv.clip[1];
   g_peak = lv.peak[0] > lv.peak[1] ? lv.peak[0] : lv.peak[1];
   g_clip = lv.clip[0] || lv.clip[1];
   const int16_t voice = channels >= 2 ? lv.peak[1] : lv.peak[0];
@@ -207,4 +227,13 @@ void loop() {
 
   handleInbound();  // remote capture control from the PC hotkey
   renderLed();      // one-pixel VU meter
+
+  // Periodically report per-channel levels to the listener UI.
+#if MUNINN_METER_REPORT_MS > 0
+  static uint32_t last_meter = 0;
+  if (millis() - last_meter >= MUNINN_METER_REPORT_MS) {
+    last_meter = millis();
+    sendMeter();
+  }
+#endif
 }

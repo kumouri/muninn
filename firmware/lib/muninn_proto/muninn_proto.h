@@ -16,7 +16,7 @@ constexpr int SAMPLE_RATE_HZ = 16000;
 constexpr int FRAME_MS = 20;                 // 320 samples / 640 bytes per AUDIO frame
 constexpr int FRAME_SAMPLES = SAMPLE_RATE_HZ * FRAME_MS / 1000;  // 320
 
-enum Type : uint8_t { AUDIO = 1, CONTROL = 2, TEXT_ACK = 3 };
+enum Type : uint8_t { AUDIO = 1, CONTROL = 2, TEXT_ACK = 3, METER = 4 };
 enum Flag : uint8_t { CAPTURING = 0x01, STEREO = 0x02 };
 enum Ctrl : uint8_t { CTRL_CAPTURE_START = 1, CTRL_CAPTURE_STOP = 2, CTRL_PING = 3, CTRL_PONG = 4 };
 

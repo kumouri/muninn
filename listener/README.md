@@ -66,6 +66,15 @@ python tools/fake_device.py --transport tcp --port 5140 --stereo session.wav
 The transcript is written as a labeled script (`**You:** …` / `**Program:** …`). No diarization model
 is used — attribution is purely by input channel.
 
+### Live level meter (M3c)
+
+Add `--meter` to show a live two-channel VU meter (program + voice) from the device's `TYPE_METER`
+frames — handy for setting mixer levels before recording:
+
+```bash
+python -m muninn_listener --transport tcp --port 5140 --mock --meter
+```
+
 ## whisper.cpp setup
 
 The default runner shells out to a whisper.cpp CLI binary. Build it from
