@@ -1,0 +1,17 @@
+# Normalize line endings to LF in the repo (checked out native on each OS).
+* text=auto eol=lf
+
+# Explicitly text
+*.py    text eol=lf
+*.md    text eol=lf
+*.h     text eol=lf
+*.cpp   text eol=lf
+*.ini   text eol=lf
+*.toml  text eol=lf
+*.yml   text eol=lf
+*.json  text eol=lf
+
+# Binary
+*.wav   binary
+*.bin   binary
+*.gguf  binary

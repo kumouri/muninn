@@ -1,0 +1,47 @@
+// Muninn firmware configuration — pin map, audio rates, mix, feature toggles.
+// Copy secrets (Wi-Fi creds) into src/secrets.h (git-ignored); see secrets.h.example.
+#pragma once
+
+// ── Audio input: PCM1808 stereo line-in via I2S ─────────────────────────────────
+// The device taps line-level audio from your mixer. It is NOT in your monitoring path —
+// you keep hearing audio through your own wired headphones / 1Mii B03. Two channels:
+//   L (ch0) = program / monitor tap     R (ch1) = your voice / mic bus
+#define MUNINN_ADC_SAMPLE_RATE_HZ 48000
+#define MUNINN_ADC_CHANNELS       2
+#define MUNINN_TAP_SAMPLE_RATE_HZ 16000   // == muninn::proto::SAMPLE_RATE_HZ
+
+// ── I2S pins to the PCM1808 (ESP32-S3 is I2S master) ────────────────────────────
+#define PIN_I2S_MCLK 0     // -> PCM1808 SCKI (system clock, 256*fs)
+#define PIN_I2S_BCK  5     // -> PCM1808 BCK
+#define PIN_I2S_LRCK 6     // -> PCM1808 LRCK
+#define PIN_I2S_DIN  7     // <- PCM1808 DOUT
+
+// ── Mix: program + your voice -> mono (Q8 fixed point, 256 = unity, 128 = -6 dB) ──
+// Defaults sum both at -6 dB (clip-safe, both present). Raise MUNINN_GAIN_VOICE_Q8 to
+// push your own voice up in the transcript. This is the "add in my own voice" control.
+#define MUNINN_GAIN_PROGRAM_Q8 128
+#define MUNINN_GAIN_VOICE_Q8   128
+
+// ── Capture button (active-low, INPUT_PULLUP) ───────────────────────────────────
+#define PIN_CAPTURE_BUTTON 4
+#define CAPTURE_DEBOUNCE_MS 40
+
+// ── Status LED (WS2812 on many S3 DevKitC-1 boards) ─────────────────────────────
+#define PIN_STATUS_LED 48
+#define LED_COLOR_IDLE      0x8E00FF   // Kumouri Purple
+#define LED_COLOR_CAPTURING 0x00FF0F   // Toxic Green
+
+// ── microSD (SPI, optional store-and-forward) ───────────────────────────────────
+#define PIN_SD_CS   10
+#define PIN_SD_MOSI 11
+#define PIN_SD_SCK  12
+#define PIN_SD_MISO 13
+
+// ── Transport selection (USB-CDC needs no radio; Wi-Fi is the wireless option) ──
+#define MUNINN_TRANSPORT_USB_CDC 0
+#define MUNINN_TRANSPORT_WIFI_TCP 1
+#define MUNINN_TRANSPORT_SD 2
+#ifndef MUNINN_TRANSPORT
+#define MUNINN_TRANSPORT MUNINN_TRANSPORT_USB_CDC
+#endif
+#define MUNINN_LISTENER_TCP_PORT 5140

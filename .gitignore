@@ -1,0 +1,43 @@
+# ── PlatformIO / firmware ─────────────────────────────
+firmware/.pio/
+firmware/.pioenvs/
+firmware/.piolibdeps/
+firmware/.vscode/
+*.elf
+*.bin
+*.hex
+*.map
+
+# ── Python listener ───────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ── Whisper models & runtime artifacts ────────────────
+*.gguf
+*.bin.model
+listener/models/
+transcripts/
+*.wav
+!tests/**/*.wav
+!listener/tests/**/*.wav
+
+# ── OS / editor ───────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+
+# ── Local secrets / device config ─────────────────────
+firmware/src/secrets.h
+*.local
+.env

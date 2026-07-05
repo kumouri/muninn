@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "muninn-listener"
+version = "0.1.0"
+description = "PC-side listener that transcribes tapped audio from the Muninn device with whisper.cpp"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Ceryce Armstrong" }]
+dependencies = []  # core is standard-library only
+
+[project.optional-dependencies]
+serial = ["pyserial>=3.5"]
+whisper = ["pywhispercpp>=1.2.0", "numpy>=1.24"]
+dev = ["pytest>=8.0", "ruff>=0.6", "pyserial>=3.5"]
+
+[project.scripts]
+muninn-listener = "muninn_listener.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["muninn_listener*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
