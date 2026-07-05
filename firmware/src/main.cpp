@@ -1,9 +1,10 @@
 // Muninn firmware entry point.
 //
-// Flow: I2S line-in tap (program + your voice, stereo) -> DSP mix to mono (per-channel gain) ->
-// downsample to 16 kHz -> pack into 20 ms AUDIO frames (CAPTURING flag reflects capture state) ->
-// Transport to the PC listener. Capture toggles from the local button OR an inbound CONTROL frame
-// (the PC hotkey). The status LED shows state. The device is never in your monitoring path.
+// Flow: I2S line-in tap (program + your voice, stereo) -> level metering + VAD -> DSP mix to mono
+// (per-channel gain) -> downsample to 16 kHz -> pack into 20 ms AUDIO frames (CAPTURING flag) ->
+// Transport to the PC listener. Capture toggles from the local button, an inbound CONTROL frame
+// (PC hotkey), or voice activity (VAD), per MUNINN_CAPTURE_MODE. The status LED is a one-pixel VU
+// meter (brightness follows level; red on clip). The device is never in your monitoring path.
 #include <Arduino.h>
 #include <FastLED.h>
 
@@ -14,6 +15,7 @@
 #include "config.h"
 #include "muninn_dsp.h"
 #include "muninn_proto.h"
+#include "muninn_vad.h"
 #include "transport/sd_store.h"
 #include "transport/store_and_forward.h"
 #include "transport/usb_cdc.h"
@@ -35,10 +37,14 @@ UsbCdcTransport g_transport;  // v1 default
 
 I2sLineSource g_source;
 CaptureTrigger g_trigger;
+Vad g_vad(MUNINN_VAD_THRESHOLD, MUNINN_VAD_HANG_MS);
 CRGB g_led[1];
 
 // Tap pipeline state.
 volatile bool g_capturing = false;
+volatile int16_t g_peak = 0;      // latest input peak, for the LED VU meter
+volatile bool g_clip = false;     // latest clip state
+volatile uint8_t g_vad_req = 0;   // 0 none, 1 start, 2 stop (produced in onTap, applied in loop)
 uint32_t g_seq = 0;
 int16_t g_frame[proto::FRAME_SAMPLES];  // 16 kHz mono accumulator (320 samples)
 size_t g_frame_fill = 0;
@@ -48,23 +54,38 @@ uint8_t g_out[proto::HEADER_SIZE + proto::FRAME_SAMPLES * sizeof(int16_t)];
 uint8_t g_inbuf[256];
 size_t g_inlen = 0;
 
-void setLed(uint32_t rgb) {
-  g_led[0] = CRGB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
-  FastLED.show();
-}
-
 void sendControl(uint8_t code) {
   uint8_t buf[proto::HEADER_SIZE + 1];
   size_t n = proto::encode(buf, sizeof(buf), proto::CONTROL, 0, g_seq++, millis(), &code, 1);
   if (n) g_transport.sendFrame(buf, n);
 }
 
-// Single place that flips capture state. `announce` = tell the listener (button-initiated); false
-// when the change came FROM the listener (a remote/hotkey control frame), to avoid echo loops.
+// Single place that flips capture state. `announce` = tell the listener (locally-initiated); false
+// when the change came FROM the listener (a remote control frame), to avoid echo loops.
 void applyCapture(bool on, bool announce) {
   g_capturing = on;
-  setLed(on ? LED_COLOR_CAPTURING : LED_COLOR_IDLE);
   if (announce) sendControl(on ? proto::CTRL_CAPTURE_START : proto::CTRL_CAPTURE_STOP);
+}
+
+// One-pixel VU meter: base color by capture state, brightness by peak, red on clip.
+void renderLed() {
+  static uint32_t last = 0;
+  uint32_t now = millis();
+  if (now - last < 30) return;  // ~33 Hz refresh
+  last = now;
+
+  const uint32_t base = g_capturing ? LED_COLOR_CAPTURING : LED_COLOR_IDLE;
+  CRGB c((base >> 16) & 0xFF, (base >> 8) & 0xFF, base & 0xFF);
+  if (g_clip) {
+    c = CRGB(255, 0, 0);
+  } else if (MUNINN_METER_ENABLE) {
+    int p = g_peak;
+    if (p > MUNINN_METER_FULL_SCALE) p = MUNINN_METER_FULL_SCALE;
+    uint8_t b = static_cast<uint8_t>(25 + static_cast<uint32_t>(p) * (255 - 25) / MUNINN_METER_FULL_SCALE);
+    c.nscale8_video(b);
+  }
+  g_led[0] = c;
+  FastLED.show();
 }
 
 void flushAudioFrame() {
@@ -81,6 +102,18 @@ void onTap(const int16_t* interleaved, size_t frames, int channels, void*) {
   static int16_t mono48k[1024];
   static int16_t mono16k[proto::FRAME_SAMPLES * 4];
 
+  // Metering + VAD run on the raw stereo (program on ch0, your voice on ch1).
+  dsp::Levels lv = dsp::measure_levels(interleaved, frames, channels, MUNINN_CLIP_THRESHOLD);
+  g_peak = lv.peak[0] > lv.peak[1] ? lv.peak[0] : lv.peak[1];
+  g_clip = lv.clip[0] || lv.clip[1];
+  const int16_t voice = channels >= 2 ? lv.peak[1] : lv.peak[0];
+  switch (g_vad.update(voice, millis())) {
+    case VadEvent::Started: g_vad_req = 1; break;
+    case VadEvent::Stopped: g_vad_req = 2; break;
+    case VadEvent::None: break;
+  }
+
+  // Mix program + voice to mono, decimate to 16 kHz, pack into frames.
   size_t mixed = dsp::mix_to_mono_q8(interleaved, frames, channels, MUNINN_GAIN_PROGRAM_Q8,
                                      MUNINN_GAIN_VOICE_Q8, mono48k,
                                      sizeof(mono48k) / sizeof(mono48k[0]));
@@ -128,7 +161,8 @@ void handleInbound() {
 void setup() {
   pinMode(PIN_CAPTURE_BUTTON, INPUT_PULLUP);
   FastLED.addLeds<WS2812, PIN_STATUS_LED, GRB>(g_led, 1);
-  setLed(LED_COLOR_IDLE);
+  g_led[0] = CRGB((LED_COLOR_IDLE >> 16) & 0xFF, (LED_COLOR_IDLE >> 8) & 0xFF, LED_COLOR_IDLE & 0xFF);
+  FastLED.show();
 
   g_transport.begin();
   g_source.setTapCallback(onTap, nullptr);
@@ -138,18 +172,24 @@ void setup() {
 void loop() {
   g_source.loop();  // reads the I2S ADC and drives onTap()
 
-  // Local button: active-low with INPUT_PULLUP, so pressed == LOW.
-  const bool pressed = digitalRead(PIN_CAPTURE_BUTTON) == LOW;
-  switch (g_trigger.update(pressed, millis())) {
-    case CaptureEvent::Started:
-      applyCapture(true, /*announce=*/true);
-      break;
-    case CaptureEvent::Stopped:
-      applyCapture(false, /*announce=*/true);
-      break;
-    case CaptureEvent::None:
-      break;
+  // Local button (unless we're in VAD-only mode). Active-low with INPUT_PULLUP.
+  if (MUNINN_CAPTURE_MODE != MUNINN_CAPTURE_VAD) {
+    const bool pressed = digitalRead(PIN_CAPTURE_BUTTON) == LOW;
+    switch (g_trigger.update(pressed, millis())) {
+      case CaptureEvent::Started: applyCapture(true, /*announce=*/true); break;
+      case CaptureEvent::Stopped: applyCapture(false, /*announce=*/true); break;
+      case CaptureEvent::None: break;
+    }
+  }
+
+  // Voice-activated capture (unless we're in button-only mode).
+  if (MUNINN_CAPTURE_MODE != MUNINN_CAPTURE_BUTTON) {
+    const uint8_t req = g_vad_req;
+    g_vad_req = 0;
+    if (req == 1) applyCapture(true, /*announce=*/true);
+    else if (req == 2) applyCapture(false, /*announce=*/true);
   }
 
   handleInbound();  // remote capture control from the PC hotkey
+  renderLed();      // one-pixel VU meter
 }

@@ -15,6 +15,10 @@ SD). The `esp32-s3-wifi` env sets it to Wi-Fi; Wi-Fi credentials + listener host
 (see the `.example`). A PC hotkey can drive capture remotely — the device honors inbound `CONTROL`
 frames (`handleInbound` in `src/main.cpp`).
 
+Capture trigger is selectable via `MUNINN_CAPTURE_MODE` (button / VAD / both). In VAD mode the device
+auto-captures from the voice channel's level (`MUNINN_VAD_THRESHOLD` / `MUNINN_VAD_HANG_MS`). The
+status LED doubles as a one-pixel VU meter (`MUNINN_METER_ENABLE`), flashing red on clip.
+
 ## Build & test
 
 ```bash
@@ -31,7 +35,9 @@ pio test -e native                 # host unit tests (DSP mix/resample + protoco
 ## Structure
 
 - `lib/muninn_proto/` — wire-protocol codec (portable, matches [`docs/protocol.md`](../docs/protocol.md)).
-- `lib/muninn_dsp/` — `mix_to_mono_q8` (program + voice, per-channel gain) + 48→16 kHz decimation.
+- `lib/muninn_dsp/` — `mix_to_mono_q8` (program + voice, per-channel gain), 48→16 kHz decimation,
+  and `measure_levels` (per-channel peak + clip, for the LED meter).
+- `lib/muninn_vad/` — `Vad`: energy gate with hangover for voice-activated capture.
 - `src/audio/` — `AudioSource` front-end: `i2s_line_source` (PCM1808 stereo line-in).
 - `src/transport/` — `usb_cdc` (v1), `wifi_tcp`, `sd_store`.
 - `src/capture/` — debounced button trigger.

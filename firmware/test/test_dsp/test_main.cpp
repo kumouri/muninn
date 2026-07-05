@@ -76,6 +76,30 @@ void test_mix_to_mono_clamps() {
   TEST_ASSERT_EQUAL_INT16(32767, out[0]);
 }
 
+void test_measure_levels_stereo_peaks() {
+  // two stereo frames: ch0 peaks at 500, ch1 peaks at -900 -> |900|
+  const int16_t in[] = {100, -200, 500, -900};
+  Levels lv = measure_levels(in, 2, 2, /*clip=*/32000);
+  TEST_ASSERT_EQUAL_INT16(500, lv.peak[0]);
+  TEST_ASSERT_EQUAL_INT16(900, lv.peak[1]);
+  TEST_ASSERT_FALSE(lv.clip[0]);
+  TEST_ASSERT_FALSE(lv.clip[1]);
+}
+
+void test_measure_levels_clip_flag() {
+  const int16_t in[] = {32000, 10};  // one stereo frame; ch0 at clip threshold
+  Levels lv = measure_levels(in, 1, 2, /*clip=*/32000);
+  TEST_ASSERT_TRUE(lv.clip[0]);
+  TEST_ASSERT_FALSE(lv.clip[1]);
+}
+
+void test_measure_levels_handles_int16_min() {
+  const int16_t in[] = {-32768, 0};  // must not overflow when abs'd
+  Levels lv = measure_levels(in, 1, 1, 32000);
+  TEST_ASSERT_EQUAL_INT16(32767, lv.peak[0]);
+  TEST_ASSERT_TRUE(lv.clip[0]);
+}
+
 void setUp() {}
 void tearDown() {}
 
@@ -89,5 +113,8 @@ int main(int, char**) {
   RUN_TEST(test_mix_to_mono_unity_sums_channels);
   RUN_TEST(test_mix_to_mono_voice_emphasis);
   RUN_TEST(test_mix_to_mono_clamps);
+  RUN_TEST(test_measure_levels_stereo_peaks);
+  RUN_TEST(test_measure_levels_clip_flag);
+  RUN_TEST(test_measure_levels_handles_int16_min);
   return UNITY_END();
 }

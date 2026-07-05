@@ -30,6 +30,21 @@
 #define PIN_STATUS_LED 48
 #define LED_COLOR_IDLE      0x8E00FF   // Kumouri Purple
 #define LED_COLOR_CAPTURING 0x00FF0F   // Toxic Green
+// Metering: modulate LED brightness with the input peak; flash red on clip. Set to 0 for a steady LED.
+#define MUNINN_METER_ENABLE 1
+#define MUNINN_METER_FULL_SCALE 6000   // peak that maps to full LED brightness
+#define MUNINN_CLIP_THRESHOLD 32000    // |sample| >= this counts as clipping
+
+// ── Capture trigger mode ────────────────────────────────────────────────────────
+#define MUNINN_CAPTURE_BUTTON 0
+#define MUNINN_CAPTURE_VAD    1
+#define MUNINN_CAPTURE_BOTH   2
+#ifndef MUNINN_CAPTURE_MODE
+#define MUNINN_CAPTURE_MODE MUNINN_CAPTURE_BUTTON
+#endif
+// VAD (voice-activated capture): auto start/stop from the voice channel's level.
+#define MUNINN_VAD_THRESHOLD 2500   // peak level considered "voice"
+#define MUNINN_VAD_HANG_MS   800    // trailing silence before auto-stop
 
 // ── microSD (SPI, optional store-and-forward) ───────────────────────────────────
 #define PIN_SD_CS   10

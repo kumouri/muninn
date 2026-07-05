@@ -32,12 +32,25 @@ own voice. You keep monitoring through your own headphones / 1Mii B03 — Muninn
 Transport is chosen at build time via `MUNINN_TRANSPORT` in `config.h`. All three transports and the
 remote-control path build in CI; on-hardware verification waits on the PCM1808.
 
-## M3 — Capture quality & ergonomics
+## M3a — Metering + VAD ✅ (code; pending hardware bring-up)
 
-- Per-channel level metering / clip indication on the status LED.
-- Optional **speaker diarization** in the listener (whisper.cpp doesn't diarize; would add a
-  diarization pass) so "you" vs "program" are labelled in the transcript.
-- Voice-activated capture (VAD) as an alternative trigger; enclosure.
+- **Per-channel level metering + clip** (`dsp::measure_levels`): the status LED is a one-pixel VU
+  meter — brightness follows the input peak, and it flashes red on clip. `MUNINN_METER_ENABLE`.
+- **Voice-activated capture** (`muninn_vad::Vad`): an energy gate with hangover auto-starts/stops
+  capture from the voice channel. Selectable via `MUNINN_CAPTURE_MODE` (button / VAD / both).
+
+## M3b — Channel-based diarization (listener)
+
+Muninn already has the two speakers on separate input channels (program vs your voice), so it can
+label the transcript **without a diarization model**: stream stereo, and attribute each whisper
+segment to the channel that was louder during it ("You" / "Program" / "Both"). Adds a `FLAG_STEREO`
+audio mode, a per-channel energy timeline in the listener, timestamped whisper segments, and a
+`fake_device --stereo` mode so it's testable with no hardware. (A model-based pass, e.g. pyannote,
+remains a future option for single-channel sources.)
+
+## M3c — Enclosure & polish
+
+Enclosure/wearable form factor; per-channel meter readout surfaced to the listener UI.
 
 ## M4 — Alternate front-ends (optional)
 

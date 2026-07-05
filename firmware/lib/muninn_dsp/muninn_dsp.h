@@ -6,6 +6,17 @@
 
 namespace muninn::dsp {
 
+// Per-channel signal levels for metering / clip indication.
+struct Levels {
+  int16_t peak[2] = {0, 0};   // peak absolute amplitude, channel 0 and 1
+  bool clip[2] = {false, false};  // true if that channel reached/exceeded clip_threshold
+};
+
+// Measure per-channel peak amplitude (and clip) over one interleaved block. Channels beyond the
+// first two are ignored (Muninn's line-in is program + voice). Safe on INT16_MIN.
+Levels measure_levels(const int16_t* in, size_t in_frames, int channels, int16_t clip_threshold);
+
+
 // Downmix interleaved int16 PCM to mono, then decimate 48 kHz -> 16 kHz (factor 3) with a
 // 3-tap moving-average anti-alias filter.
 //
