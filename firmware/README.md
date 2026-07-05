@@ -6,8 +6,14 @@ PlatformIO project for the Muninn line-tap device.
 
 | Env | Target | Purpose |
 |-----|--------|---------|
-| `esp32-s3` | ESP32-S3-DevKitC-1 | **v1** — PCM1808 stereo line-in tap + voice mix (default) |
+| `esp32-s3` | ESP32-S3-DevKitC-1 | **v1** — line-in tap + voice mix, USB-CDC transport (default) |
+| `esp32-s3-wifi` | ESP32-S3-DevKitC-1 | M2 — same, Wi-Fi TCP + SD store-and-forward transport |
 | `native` | host | Unit tests for the portable `lib/` modules |
+
+Transport is selected at build time via `MUNINN_TRANSPORT` in `src/config.h` (USB-CDC / Wi-Fi TCP /
+SD). The `esp32-s3-wifi` env sets it to Wi-Fi; Wi-Fi credentials + listener host go in `src/secrets.h`
+(see the `.example`). A PC hotkey can drive capture remotely — the device honors inbound `CONTROL`
+frames (`handleInbound` in `src/main.cpp`).
 
 ## Build & test
 

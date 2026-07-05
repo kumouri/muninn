@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from ..hotkey import DeviceLink
 from ..pipeline import Pipeline
 
 
-def serve_serial(port: str, baud: int, pipeline: Pipeline) -> None:
+def serve_serial(port: str, baud: int, pipeline: Pipeline, link: DeviceLink | None = None) -> None:
     try:
         import serial  # optional dependency: pip install "muninn-listener[serial]"
     except ImportError as e:  # pragma: no cover - environment dependent
@@ -15,6 +16,8 @@ def serve_serial(port: str, baud: int, pipeline: Pipeline) -> None:
 
     ser = serial.Serial(port, baud, timeout=0.1)
     print(f"[muninn] listening on {port} @ {baud} (usb-cdc)")
+    if link is not None:
+        link.set_sender(ser.write)  # hotkey can write CONTROL frames back over the same port
     try:
         while True:
             data = ser.read(4096)
@@ -22,4 +25,6 @@ def serve_serial(port: str, baud: int, pipeline: Pipeline) -> None:
                 for p in pipeline.feed(data):
                     print(f"[muninn] transcript -> {p}")
     finally:
+        if link is not None:
+            link.clear()
         ser.close()

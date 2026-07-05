@@ -15,6 +15,7 @@ dependencies = []  # core is standard-library only
 [project.optional-dependencies]
 serial = ["pyserial>=3.5"]
 whisper = ["pywhispercpp>=1.2.0", "numpy>=1.24"]
+hotkey = ["keyboard>=0.13.5"]
 dev = ["pytest>=8.0", "ruff>=0.6", "pyserial>=3.5"]
 
 [project.scripts]
