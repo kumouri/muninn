@@ -9,7 +9,29 @@ inline int32_t frame_to_mono(const int16_t* frame, int channels) {
   for (int c = 0; c < channels; ++c) acc += frame[c];
   return acc / channels;
 }
+// |x| computed in int32 so INT16_MIN doesn't overflow.
+inline int32_t abs32(int16_t x) { return x < 0 ? -static_cast<int32_t>(x) : x; }
 }  // namespace
+
+Levels measure_levels(const int16_t* in, size_t in_frames, int channels, int16_t clip_threshold) {
+  if (channels < 1) channels = 1;
+  const int meter_ch = channels < 2 ? 1 : 2;  // meter at most 2 channels
+  Levels lv;
+  int32_t peak[2] = {0, 0};
+  for (size_t i = 0; i < in_frames; ++i) {
+    const int16_t* frame = in + i * channels;
+    for (int c = 0; c < meter_ch; ++c) {
+      int32_t a = abs32(frame[c]);
+      if (a > peak[c]) peak[c] = a;
+    }
+  }
+  for (int c = 0; c < 2; ++c) {
+    if (peak[c] > 32767) peak[c] = 32767;
+    lv.peak[c] = static_cast<int16_t>(peak[c]);
+    lv.clip[c] = peak[c] >= clip_threshold;
+  }
+  return lv;
+}
 
 size_t downmix_to_mono(const int16_t* in, size_t in_frames, int channels, int16_t* out,
                        size_t out_cap) {
