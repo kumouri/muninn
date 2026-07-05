@@ -22,6 +22,7 @@ FRAME_SAMPLES = SAMPLE_RATE_HZ * FRAME_MS // 1000  # 320
 TYPE_AUDIO = 1
 TYPE_CONTROL = 2
 TYPE_TEXT_ACK = 3
+TYPE_METER = 4  # device -> listener: per-channel level for the UI meter
 
 # Flags
 FLAG_CAPTURING = 0x01

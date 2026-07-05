@@ -50,6 +50,11 @@ Own an audio-codec board (ESP32-A1S AudioKit, LyraT, ESP32-S3-Korvo)? Those inte
 (ES8388/ES8311) with line-in + mic-in, so the PCM1808 isn't needed — the `i2s_line_source` front-end
 would target the codec's driver instead. Note which board you have and the pinout adapts.
 
+## Enclosure
+
+A parametric 3D-printable case (with panel cutouts for USB-C, the two jacks, the button, and the LED
+light-pipe) lives in [`ENCLOSURE.md`](ENCLOSURE.md) + [`enclosure/muninn_case.scad`](enclosure/muninn_case.scad).
+
 ## Not needed for this design
 
 No DAC, speaker, or Bluetooth audio hardware — Muninn is a side-chain tap and never carries your
