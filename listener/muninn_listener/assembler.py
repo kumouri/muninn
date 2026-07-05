@@ -1,7 +1,12 @@
-"""Turn a stream of protocol frames into finished capture segments (16 kHz mono WAV bytes)."""
+"""Turn a stream of protocol frames into finished capture segments (16 kHz mono WAV bytes).
+
+For stereo (diarization) captures, the mono downmix is kept for whisper AND the separate program (L)
+and voice (R) channels are retained so the diarizer can attribute each transcript segment.
+"""
 
 from __future__ import annotations
 
+import array
 import io
 import wave
 from dataclasses import dataclass, field
@@ -9,15 +14,33 @@ from dataclasses import dataclass, field
 from . import protocol as p
 
 
+def _deinterleave(payload: bytes) -> tuple[bytes, bytes, bytes]:
+    """Split interleaved stereo s16 into (left, right, mono-downmix), all as s16 little-endian."""
+    st = array.array("h")
+    st.frombytes(payload)
+    left = st[0::2]
+    right = st[1::2]
+    mono = array.array("h", bytes(2 * len(left)))
+    for i in range(len(left)):
+        mono[i] = (left[i] + right[i]) // 2
+    return left.tobytes(), right.tobytes(), mono.tobytes()
+
+
 @dataclass
 class Segment:
-    pcm: bytes  # s16le, 16 kHz, mono
+    pcm: bytes  # s16le, 16 kHz, mono (fed to whisper)
     first_seq: int
     first_timestamp_ms: int
+    left: bytes | None = None  # program channel (stereo captures only)
+    right: bytes | None = None  # voice channel (stereo captures only)
 
     @property
     def duration_s(self) -> float:
         return len(self.pcm) / 2 / p.SAMPLE_RATE_HZ
+
+    @property
+    def is_stereo(self) -> bool:
+        return self.left is not None and self.right is not None
 
     def to_wav_bytes(self) -> bytes:
         buf = io.BytesIO()
@@ -31,14 +54,13 @@ class Segment:
 
 @dataclass
 class SegmentBuilder:
-    """Accumulates audio while capturing; emits a Segment when a capture ends.
-
-    A capture is the run of AUDIO frames carrying FLAG_CAPTURING. CONTROL START/STOP frames are
-    honored as explicit boundaries so a dropped final audio frame still finalizes the segment.
-    """
+    """Accumulates audio while capturing; emits a Segment when a capture ends."""
 
     _active: bool = False
     _buf: bytearray = field(default_factory=bytearray)
+    _left: bytearray = field(default_factory=bytearray)
+    _right: bytearray = field(default_factory=bytearray)
+    _stereo: bool = False
     _first_seq: int = 0
     _first_ts: int = 0
 
@@ -55,14 +77,24 @@ class SegmentBuilder:
             if frame.capturing:
                 if not self._active:
                     self._begin(frame)
-                self._buf.extend(frame.payload)
+                if frame.stereo:
+                    self._stereo = True
+                    left, right, mono = _deinterleave(frame.payload)
+                    self._left.extend(left)
+                    self._right.extend(right)
+                    self._buf.extend(mono)
+                else:
+                    self._buf.extend(frame.payload)
             elif self._active:
                 return self._finalize()
         return None
 
     def _begin(self, frame: p.Frame) -> None:
         self._active = True
+        self._stereo = False
         self._buf = bytearray()
+        self._left = bytearray()
+        self._right = bytearray()
         self._first_seq = frame.seq
         self._first_ts = frame.timestamp_ms
 
@@ -72,4 +104,12 @@ class SegmentBuilder:
         self._active = False
         if not self._buf:
             return None
+        if self._stereo:
+            return Segment(
+                bytes(self._buf),
+                self._first_seq,
+                self._first_ts,
+                left=bytes(self._left),
+                right=bytes(self._right),
+            )
         return Segment(bytes(self._buf), self._first_seq, self._first_ts)

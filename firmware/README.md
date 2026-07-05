@@ -19,6 +19,9 @@ Capture trigger is selectable via `MUNINN_CAPTURE_MODE` (button / VAD / both). I
 auto-captures from the voice channel's level (`MUNINN_VAD_THRESHOLD` / `MUNINN_VAD_HANG_MS`). The
 status LED doubles as a one-pixel VU meter (`MUNINN_METER_ENABLE`), flashing red on clip.
 
+Set `MUNINN_STEREO_TAP=1` (`env:esp32-s3-stereo`) to stream program (L) + voice (R) separately so the
+listener can label "You" vs "Program"; the default mixes them to mono (half the bandwidth).
+
 ## Build & test
 
 ```bash

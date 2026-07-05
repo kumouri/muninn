@@ -10,6 +10,12 @@
 #define MUNINN_ADC_CHANNELS       2
 #define MUNINN_TAP_SAMPLE_RATE_HZ 16000   // == muninn::proto::SAMPLE_RATE_HZ
 
+// Diarization tap (M3b): send interleaved stereo (program L + voice R) instead of the mono mix, so
+// the listener can label "You" vs "Program". Off by default (mono is half the bandwidth).
+#ifndef MUNINN_STEREO_TAP
+#define MUNINN_STEREO_TAP 0
+#endif
+
 // ── I2S pins to the PCM1808 (ESP32-S3 is I2S master) ────────────────────────────
 #define PIN_I2S_MCLK 0     // -> PCM1808 SCKI (system clock, 256*fs)
 #define PIN_I2S_BCK  5     // -> PCM1808 BCK

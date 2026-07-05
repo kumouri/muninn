@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from . import diarize
 from .assembler import SegmentBuilder
-from .protocol import FrameParser
+from .protocol import SAMPLE_RATE_HZ, FrameParser
 from .whisper_runner import WhisperRunner
 from .writer import write_transcript
 
@@ -25,9 +26,21 @@ class Pipeline:
             segment = self._builder.push(frame)
             if segment is None:
                 continue
-            text = self._runner.transcribe(segment.to_wav_bytes())
+            segments = self._runner.transcribe(segment.to_wav_bytes())
+
+            labels = None
+            if segment.is_stereo:
+                # Attribute each transcript segment to the louder input channel.
+                labels = diarize.label_segments(
+                    segments, segment.left, segment.right, SAMPLE_RATE_HZ
+                )
+
             path = write_transcript(
-                self._out_dir, text, duration_s=segment.duration_s, source=self._source
+                self._out_dir,
+                segments,
+                labels=labels,
+                duration_s=segment.duration_s,
+                source=self._source,
             )
             written.append(path)
         return written

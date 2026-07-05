@@ -46,9 +46,15 @@ volatile int16_t g_peak = 0;      // latest input peak, for the LED VU meter
 volatile bool g_clip = false;     // latest clip state
 volatile uint8_t g_vad_req = 0;   // 0 none, 1 start, 2 stop (produced in onTap, applied in loop)
 uint32_t g_seq = 0;
-int16_t g_frame[proto::FRAME_SAMPLES];  // 16 kHz mono accumulator (320 samples)
+#if MUNINN_STEREO_TAP
+constexpr size_t kOutChannels = 2;  // diarization tap: interleaved 16 kHz stereo
+#else
+constexpr size_t kOutChannels = 1;  // mono mix (default)
+#endif
+constexpr size_t kFlushSamples = proto::FRAME_SAMPLES * kOutChannels;  // 20 ms per frame
+int16_t g_frame[kFlushSamples];  // 16 kHz accumulator
 size_t g_frame_fill = 0;
-uint8_t g_out[proto::HEADER_SIZE + proto::FRAME_SAMPLES * sizeof(int16_t)];
+uint8_t g_out[proto::HEADER_SIZE + sizeof(g_frame)];
 
 // Inbound (listener -> device) frame reassembly, for the PC hotkey's remote control.
 uint8_t g_inbuf[256];
@@ -89,7 +95,10 @@ void renderLed() {
 }
 
 void flushAudioFrame() {
-  const uint8_t flags = g_capturing ? proto::CAPTURING : 0;
+  uint8_t flags = g_capturing ? proto::CAPTURING : 0;
+#if MUNINN_STEREO_TAP
+  flags |= proto::STEREO;
+#endif
   size_t n = proto::encode(g_out, sizeof(g_out), proto::AUDIO, flags, g_seq++, millis(),
                            reinterpret_cast<const uint8_t*>(g_frame),
                            static_cast<uint16_t>(g_frame_fill * sizeof(int16_t)));
@@ -99,9 +108,6 @@ void flushAudioFrame() {
 
 // Runs from the I2S read in loop() — keep it lean.
 void onTap(const int16_t* interleaved, size_t frames, int channels, void*) {
-  static int16_t mono48k[1024];
-  static int16_t mono16k[proto::FRAME_SAMPLES * 4];
-
   // Metering + VAD run on the raw stereo (program on ch0, your voice on ch1).
   dsp::Levels lv = dsp::measure_levels(interleaved, frames, channels, MUNINN_CLIP_THRESHOLD);
   g_peak = lv.peak[0] > lv.peak[1] ? lv.peak[0] : lv.peak[1];
@@ -113,15 +119,24 @@ void onTap(const int16_t* interleaved, size_t frames, int channels, void*) {
     case VadEvent::None: break;
   }
 
-  // Mix program + voice to mono, decimate to 16 kHz, pack into frames.
+#if MUNINN_STEREO_TAP
+  // Diarization tap: keep program (L) + voice (R) separate at 16 kHz.
+  static int16_t st16k[proto::FRAME_SAMPLES * 4 * 2];
+  size_t got = dsp::downsample_48k_to_16k_stereo(interleaved, frames, st16k,
+                                                 sizeof(st16k) / sizeof(st16k[0]));
+#else
+  // Default: mix program + voice to mono, decimate to 16 kHz.
+  static int16_t mono48k[1024];
+  static int16_t st16k[proto::FRAME_SAMPLES * 4];  // "st16k" == mono samples here
   size_t mixed = dsp::mix_to_mono_q8(interleaved, frames, channels, MUNINN_GAIN_PROGRAM_Q8,
                                      MUNINN_GAIN_VOICE_Q8, mono48k,
                                      sizeof(mono48k) / sizeof(mono48k[0]));
-  size_t got = dsp::downsample_48k_to_16k(mono48k, mixed, 1, mono16k,
-                                          sizeof(mono16k) / sizeof(mono16k[0]));
+  size_t got = dsp::downsample_48k_to_16k(mono48k, mixed, 1, st16k,
+                                          sizeof(st16k) / sizeof(st16k[0]));
+#endif
   for (size_t i = 0; i < got; ++i) {
-    g_frame[g_frame_fill++] = mono16k[i];
-    if (g_frame_fill == proto::FRAME_SAMPLES) flushAudioFrame();
+    g_frame[g_frame_fill++] = st16k[i];
+    if (g_frame_fill == kFlushSamples) flushAudioFrame();
   }
 }
 
