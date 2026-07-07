@@ -73,8 +73,10 @@ the full mixer mix (already digital), and forwards it to the desktop — no ADC,
   (`env:esp32`; the S3 has no Classic BT). Silent sink (no DAC — you monitor on wired headphones);
   SBC→PCM → `dsp::resample_linear_mono` to 16 kHz → USB-CDC to the desktop. New chip, same protocol/
   transport/listener.
-- **M4b — listener**: capture the **desktop webcam mic** as the voice channel, align it with the
-  incoming program stream, and reuse the You/Program diarization + writer.
+- **M4b — listener** ✅ (mic capture pending a real device; merge logic tested): capture the
+  **desktop webcam mic** into a timestamped `MicBuffer`; when a program capture finalizes, pull the
+  aligned slice (`--program-delay-ms` compensates BT latency), treat program as L + mic as R, and
+  reuse the You/Program diarization + writer. `muninn_listener --desktop-mic` (needs the `mic` extra).
 
 ## M5 — Other front-ends (optional, later)
 
