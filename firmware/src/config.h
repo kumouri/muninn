@@ -2,6 +2,19 @@
 // Copy secrets (Wi-Fi creds) into src/secrets.h (git-ignored); see secrets.h.example.
 #pragma once
 
+// ── Audio front-end selection ───────────────────────────────────────────────────
+//   I2S_LINE  = PCM1808 stereo line-in on the ESP32-S3 (default).
+//   A2DP_SINK = Bluetooth A2DP sink on the ORIGINAL ESP32 (Classic BT; captures the B03+ stream).
+#define MUNINN_FRONTEND_I2S_LINE  0
+#define MUNINN_FRONTEND_A2DP_SINK 1
+#ifndef MUNINN_FRONTEND
+#define MUNINN_FRONTEND MUNINN_FRONTEND_I2S_LINE
+#endif
+
+// A2DP sink (original ESP32): Bluetooth name shown to the B03+, and the SBC sample rate it sends.
+#define MUNINN_A2DP_NAME "Muninn"
+#define MUNINN_A2DP_SAMPLE_RATE 44100
+
 // ── Audio input: PCM1808 stereo line-in via I2S ─────────────────────────────────
 // The device taps line-level audio from your mixer. It is NOT in your monitoring path —
 // you keep hearing audio through your own wired headphones / 1Mii B03. Two channels:
@@ -32,8 +45,15 @@
 #define PIN_CAPTURE_BUTTON 4
 #define CAPTURE_DEBOUNCE_MS 40
 
-// ── Status LED (WS2812 on many S3 DevKitC-1 boards) ─────────────────────────────
+// ── Status LED (WS2812) ─────────────────────────────────────────────────────────
+// GPIO48 is the S3 DevKitC-1 onboard RGB; the original ESP32 has no GPIO48, so use a low GPIO there.
+#ifndef PIN_STATUS_LED
+#if MUNINN_FRONTEND == MUNINN_FRONTEND_A2DP_SINK
+#define PIN_STATUS_LED 2
+#else
 #define PIN_STATUS_LED 48
+#endif
+#endif
 #define LED_COLOR_IDLE      0x8E00FF   // Kumouri Purple
 #define LED_COLOR_CAPTURING 0x00FF0F   // Toxic Green
 // Metering: modulate LED brightness with the input peak; flash red on clip. Set to 0 for a steady LED.

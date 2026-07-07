@@ -6,9 +6,14 @@ PlatformIO project for the Muninn line-tap device.
 
 | Env | Target | Purpose |
 |-----|--------|---------|
-| `esp32-s3` | ESP32-S3-DevKitC-1 | **v1** — line-in tap + voice mix, USB-CDC transport (default) |
-| `esp32-s3-wifi` | ESP32-S3-DevKitC-1 | M2 — same, Wi-Fi TCP + SD store-and-forward transport |
+| `esp32-s3` | ESP32-S3-DevKitC-1 | **v1** — PCM1808 line-in tap + voice mix, USB-CDC (default) |
+| `esp32-s3-wifi` | ESP32-S3-DevKitC-1 | M2 — same, Wi-Fi TCP + SD store-and-forward |
+| `esp32-s3-stereo` | ESP32-S3-DevKitC-1 | M3b — stereo (program/voice) diarization tap |
+| `esp32` | **original ESP32** | M4 — Bluetooth **A2DP sink** capturing the B03+ mixer mix |
 | `native` | host | Unit tests for the portable `lib/` modules |
+
+The `esp32` env is a **different chip** (original ESP32) — A2DP sink needs Classic Bluetooth, which
+the S3 lacks. `MUNINN_FRONTEND` in `config.h` selects the audio front-end (`I2S_LINE` vs `A2DP_SINK`).
 
 Transport is selected at build time via `MUNINN_TRANSPORT` in `src/config.h` (USB-CDC / Wi-Fi TCP /
 SD). The `esp32-s3-wifi` env sets it to Wi-Fi; Wi-Fi credentials + listener host go in `src/secrets.h`

@@ -1,16 +1,17 @@
 // Muninn firmware entry point.
 //
-// Flow: I2S line-in tap (program + your voice, stereo) -> level metering + VAD -> DSP mix to mono
-// (per-channel gain) -> downsample to 16 kHz -> pack into 20 ms AUDIO frames (CAPTURING flag) ->
-// Transport to the PC listener. Capture toggles from the local button, an inbound CONTROL frame
-// (PC hotkey), or voice activity (VAD), per MUNINN_CAPTURE_MODE. The status LED is a one-pixel VU
-// meter (brightness follows level; red on clip). The device is never in your monitoring path.
+// Two audio front-ends behind the same pipeline (MUNINN_FRONTEND in config.h):
+//   I2S_LINE  (ESP32-S3): PCM1808 stereo line tap, mixed/diarized program + voice.
+//   A2DP_SINK (orig ESP32): silent Bluetooth sink capturing the B03+ mixer mix; voice is added on
+//                           the desktop from its webcam mic (see the listener).
+// Either way: tap -> DSP to 16 kHz -> 20 ms AUDIO frames -> transport to the PC listener. Capture
+// toggles from the button, an inbound CONTROL frame (PC hotkey), or VAD. The device never sits in
+// your monitoring path.
 #include <Arduino.h>
 #include <FastLED.h>
 
 #include <cstring>
 
-#include "audio/i2s_line_source.h"
 #include "capture/trigger.h"
 #include "config.h"
 #include "muninn_dsp.h"
@@ -21,6 +22,19 @@
 #include "transport/usb_cdc.h"
 #include "transport/wifi_tcp.h"
 
+#if MUNINN_FRONTEND == MUNINN_FRONTEND_A2DP_SINK
+#include "audio/a2dp_sink_source.h"
+#else
+#include "audio/i2s_line_source.h"
+#endif
+
+// Stereo output frames only for the line-in diarization tap.
+#if MUNINN_FRONTEND == MUNINN_FRONTEND_I2S_LINE && MUNINN_STEREO_TAP
+#define MUNINN_OUT_STEREO 1
+#else
+#define MUNINN_OUT_STEREO 0
+#endif
+
 namespace {
 using namespace muninn;
 
@@ -28,39 +42,44 @@ using namespace muninn;
 #if MUNINN_TRANSPORT == MUNINN_TRANSPORT_WIFI_TCP
 WifiTcpTransport g_wifi;
 SdStore g_sd;
-StoreAndForwardTransport g_transport(g_wifi, g_sd);  // wireless + offline buffering
+StoreAndForwardTransport g_transport(g_wifi, g_sd);
 #elif MUNINN_TRANSPORT == MUNINN_TRANSPORT_SD
 SdStore g_transport;
 #else
-UsbCdcTransport g_transport;  // v1 default
+UsbCdcTransport g_transport;
 #endif
 
+#if MUNINN_FRONTEND == MUNINN_FRONTEND_A2DP_SINK
+A2dpSinkSource g_source;
+#else
 I2sLineSource g_source;
+#endif
+
 CaptureTrigger g_trigger;
 Vad g_vad(MUNINN_VAD_THRESHOLD, MUNINN_VAD_HANG_MS);
 CRGB g_led[1];
 
 // Tap pipeline state.
 volatile bool g_capturing = false;
-volatile int16_t g_peak = 0;      // latest input peak (max of channels), for the LED VU meter
-volatile bool g_clip = false;     // latest clip state (either channel)
-volatile int16_t g_peak_l = 0;    // per-channel peaks for the listener meter (program / voice)
+volatile int16_t g_peak = 0;
+volatile bool g_clip = false;
+volatile int16_t g_peak_l = 0;
 volatile int16_t g_peak_r = 0;
 volatile bool g_clip_l = false;
 volatile bool g_clip_r = false;
-volatile uint8_t g_vad_req = 0;   // 0 none, 1 start, 2 stop (produced in onTap, applied in loop)
+volatile uint8_t g_vad_req = 0;  // 0 none, 1 start, 2 stop
 uint32_t g_seq = 0;
-#if MUNINN_STEREO_TAP
-constexpr size_t kOutChannels = 2;  // diarization tap: interleaved 16 kHz stereo
+
+#if MUNINN_OUT_STEREO
+constexpr size_t kOutChannels = 2;
 #else
-constexpr size_t kOutChannels = 1;  // mono mix (default)
+constexpr size_t kOutChannels = 1;
 #endif
-constexpr size_t kFlushSamples = proto::FRAME_SAMPLES * kOutChannels;  // 20 ms per frame
-int16_t g_frame[kFlushSamples];  // 16 kHz accumulator
+constexpr size_t kFlushSamples = proto::FRAME_SAMPLES * kOutChannels;
+int16_t g_frame[kFlushSamples];
 size_t g_frame_fill = 0;
 uint8_t g_out[proto::HEADER_SIZE + sizeof(g_frame)];
 
-// Inbound (listener -> device) frame reassembly, for the PC hotkey's remote control.
 uint8_t g_inbuf[256];
 size_t g_inlen = 0;
 
@@ -70,7 +89,6 @@ void sendControl(uint8_t code) {
   if (n) g_transport.sendFrame(buf, n);
 }
 
-// Per-channel level for the listener UI meter: peak_L(u16), peak_R(u16), clip(u8: bit0 L, bit1 R).
 void sendMeter() {
   const uint16_t pl = static_cast<uint16_t>(g_peak_l);
   const uint16_t pr = static_cast<uint16_t>(g_peak_r);
@@ -82,20 +100,16 @@ void sendMeter() {
   if (n) g_transport.sendFrame(buf, n);
 }
 
-// Single place that flips capture state. `announce` = tell the listener (locally-initiated); false
-// when the change came FROM the listener (a remote control frame), to avoid echo loops.
 void applyCapture(bool on, bool announce) {
   g_capturing = on;
   if (announce) sendControl(on ? proto::CTRL_CAPTURE_START : proto::CTRL_CAPTURE_STOP);
 }
 
-// One-pixel VU meter: base color by capture state, brightness by peak, red on clip.
 void renderLed() {
   static uint32_t last = 0;
   uint32_t now = millis();
-  if (now - last < 30) return;  // ~33 Hz refresh
+  if (now - last < 30) return;
   last = now;
-
   const uint32_t base = g_capturing ? LED_COLOR_CAPTURING : LED_COLOR_IDLE;
   CRGB c((base >> 16) & 0xFF, (base >> 8) & 0xFF, base & 0xFF);
   if (g_clip) {
@@ -112,7 +126,7 @@ void renderLed() {
 
 void flushAudioFrame() {
   uint8_t flags = g_capturing ? proto::CAPTURING : 0;
-#if MUNINN_STEREO_TAP
+#if MUNINN_OUT_STEREO
   flags |= proto::STEREO;
 #endif
   size_t n = proto::encode(g_out, sizeof(g_out), proto::AUDIO, flags, g_seq++, millis(),
@@ -122,9 +136,9 @@ void flushAudioFrame() {
   g_frame_fill = 0;
 }
 
-// Runs from the I2S read in loop() — keep it lean.
+// Runs from the audio path — keep it lean.
 void onTap(const int16_t* interleaved, size_t frames, int channels, void*) {
-  // Metering + VAD run on the raw stereo (program on ch0, your voice on ch1).
+  // Metering + VAD on the raw input.
   dsp::Levels lv = dsp::measure_levels(interleaved, frames, channels, MUNINN_CLIP_THRESHOLD);
   g_peak_l = lv.peak[0];
   g_peak_r = lv.peak[1];
@@ -132,30 +146,47 @@ void onTap(const int16_t* interleaved, size_t frames, int channels, void*) {
   g_clip_r = lv.clip[1];
   g_peak = lv.peak[0] > lv.peak[1] ? lv.peak[0] : lv.peak[1];
   g_clip = lv.clip[0] || lv.clip[1];
-  const int16_t voice = channels >= 2 ? lv.peak[1] : lv.peak[0];
-  switch (g_vad.update(voice, millis())) {
+#if MUNINN_FRONTEND == MUNINN_FRONTEND_A2DP_SINK
+  const int16_t vad_level = g_peak;  // no separate voice channel; use program level
+#else
+  const int16_t vad_level = channels >= 2 ? lv.peak[1] : lv.peak[0];  // voice channel
+#endif
+  switch (g_vad.update(vad_level, millis())) {
     case VadEvent::Started: g_vad_req = 1; break;
     case VadEvent::Stopped: g_vad_req = 2; break;
     case VadEvent::None: break;
   }
 
-#if MUNINN_STEREO_TAP
-  // Diarization tap: keep program (L) + voice (R) separate at 16 kHz.
+  // Convert this block to the 16 kHz payload the wire protocol carries.
+  const int16_t* packed;
+  size_t got;
+#if MUNINN_FRONTEND == MUNINN_FRONTEND_A2DP_SINK
+  // A2DP program: 44.1 kHz stereo -> mono -> 16 kHz (linear; SBC rate isn't an integer of 16k).
+  static int16_t mono_in[4096];
+  static int16_t out16k[2048];
+  size_t m = dsp::downmix_to_mono(interleaved, frames, channels, mono_in,
+                                  sizeof(mono_in) / sizeof(mono_in[0]));
+  got = dsp::resample_linear_mono(mono_in, m, MUNINN_A2DP_SAMPLE_RATE, proto::SAMPLE_RATE_HZ,
+                                  out16k, sizeof(out16k) / sizeof(out16k[0]));
+  packed = out16k;
+#elif MUNINN_OUT_STEREO
+  // Line-in diarization tap: keep program (L) + voice (R) separate at 16 kHz.
   static int16_t st16k[proto::FRAME_SAMPLES * 4 * 2];
-  size_t got = dsp::downsample_48k_to_16k_stereo(interleaved, frames, st16k,
-                                                 sizeof(st16k) / sizeof(st16k[0]));
+  got = dsp::downsample_48k_to_16k_stereo(interleaved, frames, st16k,
+                                          sizeof(st16k) / sizeof(st16k[0]));
+  packed = st16k;
 #else
-  // Default: mix program + voice to mono, decimate to 16 kHz.
+  // Line-in default: mix program + voice to mono, decimate to 16 kHz.
   static int16_t mono48k[1024];
-  static int16_t st16k[proto::FRAME_SAMPLES * 4];  // "st16k" == mono samples here
+  static int16_t out16k[proto::FRAME_SAMPLES * 4];
   size_t mixed = dsp::mix_to_mono_q8(interleaved, frames, channels, MUNINN_GAIN_PROGRAM_Q8,
                                      MUNINN_GAIN_VOICE_Q8, mono48k,
                                      sizeof(mono48k) / sizeof(mono48k[0]));
-  size_t got = dsp::downsample_48k_to_16k(mono48k, mixed, 1, st16k,
-                                          sizeof(st16k) / sizeof(st16k[0]));
+  got = dsp::downsample_48k_to_16k(mono48k, mixed, 1, out16k, sizeof(out16k) / sizeof(out16k[0]));
+  packed = out16k;
 #endif
   for (size_t i = 0; i < got; ++i) {
-    g_frame[g_frame_fill++] = st16k[i];
+    g_frame[g_frame_fill++] = packed[i];
     if (g_frame_fill == kFlushSamples) flushAudioFrame();
   }
 }
@@ -165,11 +196,10 @@ void handleInbound() {
   uint8_t tmp[128];
   size_t got = g_transport.poll(tmp, sizeof(tmp));
   if (got) {
-    if (g_inlen + got > sizeof(g_inbuf)) g_inlen = 0;  // overflow guard — drop stale partial
+    if (g_inlen + got > sizeof(g_inbuf)) g_inlen = 0;
     memcpy(g_inbuf + g_inlen, tmp, got);
     g_inlen += got;
   }
-
   size_t off = 0;
   while (off < g_inlen) {
     proto::Frame f;
@@ -182,7 +212,7 @@ void handleInbound() {
         else if (f.payload[0] == proto::CTRL_CAPTURE_STOP) applyCapture(false, false);
       }
       off += consumed;
-    } else {  // BAD_MAGIC — skip forward to resync
+    } else {
       off += consumed ? consumed : 1;
     }
   }
@@ -205,9 +235,8 @@ void setup() {
 }
 
 void loop() {
-  g_source.loop();  // reads the I2S ADC and drives onTap()
+  g_source.loop();
 
-  // Local button (unless we're in VAD-only mode). Active-low with INPUT_PULLUP.
   if (MUNINN_CAPTURE_MODE != MUNINN_CAPTURE_VAD) {
     const bool pressed = digitalRead(PIN_CAPTURE_BUTTON) == LOW;
     switch (g_trigger.update(pressed, millis())) {
@@ -217,7 +246,6 @@ void loop() {
     }
   }
 
-  // Voice-activated capture (unless we're in button-only mode).
   if (MUNINN_CAPTURE_MODE != MUNINN_CAPTURE_BUTTON) {
     const uint8_t req = g_vad_req;
     g_vad_req = 0;
@@ -225,10 +253,9 @@ void loop() {
     else if (req == 2) applyCapture(false, /*announce=*/true);
   }
 
-  handleInbound();  // remote capture control from the PC hotkey
-  renderLed();      // one-pixel VU meter
+  handleInbound();
+  renderLed();
 
-  // Periodically report per-channel levels to the listener UI.
 #if MUNINN_METER_REPORT_MS > 0
   static uint32_t last_meter = 0;
   if (millis() - last_meter >= MUNINN_METER_REPORT_MS) {

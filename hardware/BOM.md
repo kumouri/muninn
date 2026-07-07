@@ -50,6 +50,21 @@ Own an audio-codec board (ESP32-A1S AudioKit, LyraT, ESP32-S3-Korvo)? Those inte
 (ES8388/ES8311) with line-in + mic-in, so the PCM1808 isn't needed — the `i2s_line_source` front-end
 would target the codec's driver instead. Note which board you have and the pinout adapts.
 
+## M4 — Bluetooth A2DP-sink variant (different chip)
+
+For tapping the **B03+ over Bluetooth** (the full mixer mix, no ADC), the audio front-end is a silent
+A2DP sink — which requires **Classic Bluetooth**, so it uses the **original ESP32** (not the S3):
+
+| # | Part | Notes |
+|---|------|-------|
+| 1 | **Original ESP32** dev board (ESP32-WROOM-32 / DevKitC / WROVER) | Classic BT for A2DP sink; the S3 is BLE-only |
+| 1 | WS2812 / addressable RGB LED | Status/meter (GPIO2 default on this board) |
+| 1 | Momentary push button | Capture trigger (GPIO4) |
+| 1 | USB cable | UART-bridge serial to the desktop (data out) |
+
+No PCM1808, no DAC, no jacks — audio comes in over Bluetooth and out over USB. Voice is added on the
+desktop (webcam mic). Build with `pio run -e esp32`.
+
 ## Enclosure
 
 A parametric 3D-printable case (with panel cutouts for USB-C, the two jacks, the button, and the LED

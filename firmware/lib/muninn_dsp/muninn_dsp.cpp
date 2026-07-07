@@ -77,6 +77,23 @@ size_t downsample_48k_to_16k(const int16_t* in, size_t in_frames, int channels,
   return written;
 }
 
+size_t resample_linear_mono(const int16_t* in, size_t in_len, int in_rate, int out_rate,
+                            int16_t* out, size_t out_cap) {
+  if (in_len == 0 || in_rate <= 0 || out_rate <= 0) return 0;
+  size_t out_len = static_cast<size_t>(static_cast<uint64_t>(in_len) * out_rate / in_rate);
+  if (out_len > out_cap) out_len = out_cap;
+  const double step = static_cast<double>(in_rate) / out_rate;
+  for (size_t i = 0; i < out_len; ++i) {
+    const double src = i * step;
+    const size_t j = static_cast<size_t>(src);
+    const double frac = src - j;
+    const int32_t a = in[j];
+    const int32_t b = (j + 1 < in_len) ? in[j + 1] : in[j];
+    out[i] = static_cast<int16_t>(a + (b - a) * frac);
+  }
+  return out_len;
+}
+
 size_t downsample_48k_to_16k_stereo(const int16_t* in, size_t in_frames, int16_t* out,
                                     size_t out_cap) {
   const size_t groups = in_frames / 3;  // 48000 / 16000 = 3
