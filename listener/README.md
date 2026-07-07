@@ -66,6 +66,15 @@ python tools/fake_device.py --transport tcp --port 5140 --stereo session.wav
 The transcript is written as a labeled script (`**You:** …` / `**Program:** …`). No diarization model
 is used — attribution is purely by input channel.
 
+**Desktop-mic voice (M4b).** When the device only forwards *program* audio (the Bluetooth A2DP-sink
+front-end), capture your voice from the desktop mic instead and let the listener merge + diarize:
+
+```bash
+pip install -e "listener[dev,mic]"
+python -m muninn_listener --transport usb --serial-port COM7 --desktop-mic \
+    --program-delay-ms 150   # nudge to align the Bluetooth-delayed program with your live mic
+```
+
 ### Live level meter (M3c)
 
 Add `--meter` to show a live two-channel VU meter (program + voice) from the device's `TYPE_METER`

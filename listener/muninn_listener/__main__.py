@@ -47,6 +47,20 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--hotkey-combo", default="ctrl+alt+m", help="key combo for --hotkey global")
 
     ap.add_argument("--meter", action="store_true", help="show a live per-channel level meter")
+
+    # desktop webcam mic as the voice channel (for the A2DP program-only front-end)
+    ap.add_argument(
+        "--desktop-mic",
+        action="store_true",
+        help="capture the desktop mic as the voice channel and diarize (needs the mic extra)",
+    )
+    ap.add_argument("--mic-device", default=None, help="sounddevice input device (name or index)")
+    ap.add_argument(
+        "--program-delay-ms",
+        type=float,
+        default=150.0,
+        help="how far the Bluetooth program lags real time, for mic alignment",
+    )
     return ap
 
 
@@ -71,7 +85,23 @@ def main(argv: list[str] | None = None) -> int:
 
         on_meter = MeterDisplay().update
 
-    pipeline = Pipeline(runner, out_dir=args.out, on_meter=on_meter)
+    mic_buffer = None
+    desktop_mic = None
+    if args.desktop_mic:
+        from .mic import DesktopMic, MicBuffer
+
+        mic_buffer = MicBuffer()
+        desktop_mic = DesktopMic(mic_buffer, device=args.mic_device)
+        desktop_mic.start()
+        print("[muninn] desktop mic capturing (voice channel)")
+
+    pipeline = Pipeline(
+        runner,
+        out_dir=args.out,
+        on_meter=on_meter,
+        mic_buffer=mic_buffer,
+        program_delay_ms=args.program_delay_ms,
+    )
 
     link = None
     if args.hotkey != "off":
