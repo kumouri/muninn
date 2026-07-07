@@ -35,6 +35,12 @@ size_t downsample_48k_to_16k(const int16_t* in, size_t in_frames, int channels,
 size_t downmix_to_mono(const int16_t* in, size_t in_frames, int channels, int16_t* out,
                        size_t out_cap);
 
+// Linear-resample mono int16 from `in_rate` to `out_rate` (any ratio). Used for the A2DP path,
+// where SBC audio arrives at 44.1 kHz (non-integer ratio to 16 kHz). Stateless per-block: fine for
+// speech transcription; block-boundary error is negligible at these rates. Returns samples written.
+size_t resample_linear_mono(const int16_t* in, size_t in_len, int in_rate, int out_rate,
+                            int16_t* out, size_t out_cap);
+
 // Decimate interleaved 48 kHz *stereo* -> interleaved 16 kHz stereo (each channel filtered
 // independently, 3-tap average). Used for the diarization tap, which keeps program (L) and voice
 // (R) separate. `out_cap` is in samples (interleaved). Returns interleaved samples written

@@ -76,6 +76,26 @@ void test_mix_to_mono_clamps() {
   TEST_ASSERT_EQUAL_INT16(32767, out[0]);
 }
 
+void test_resample_linear_downsamples() {
+  // 4 samples at 4 Hz -> 2 samples at 2 Hz: pick src positions 0 and 2.
+  const int16_t in[] = {0, 300, 600, 900};
+  int16_t out[4] = {0};
+  size_t n = resample_linear_mono(in, 4, 4, 2, out, 4);
+  TEST_ASSERT_EQUAL_UINT(2, n);
+  TEST_ASSERT_EQUAL_INT16(0, out[0]);
+  TEST_ASSERT_EQUAL_INT16(600, out[1]);
+}
+
+void test_resample_linear_interpolates() {
+  // Upsample 2 -> 4: midpoint should interpolate.
+  const int16_t in[] = {0, 1000};
+  int16_t out[8] = {0};
+  size_t n = resample_linear_mono(in, 2, 2, 4, out, 8);
+  TEST_ASSERT_EQUAL_UINT(4, n);
+  TEST_ASSERT_EQUAL_INT16(0, out[0]);
+  TEST_ASSERT_EQUAL_INT16(500, out[1]);  // halfway between 0 and 1000
+}
+
 void test_downsample_stereo_keeps_channels_separate() {
   // 3 stereo frames -> 1 stereo output frame (2 samples). L=100 const, R=900 const.
   const int16_t in[] = {100, 900, 100, 900, 100, 900};
@@ -127,5 +147,7 @@ int main(int, char**) {
   RUN_TEST(test_measure_levels_clip_flag);
   RUN_TEST(test_measure_levels_handles_int16_min);
   RUN_TEST(test_downsample_stereo_keeps_channels_separate);
+  RUN_TEST(test_resample_linear_downsamples);
+  RUN_TEST(test_resample_linear_interpolates);
   return UNITY_END();
 }

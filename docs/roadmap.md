@@ -61,16 +61,28 @@ A model-based pass (e.g. pyannote) remains a future option for single-channel so
 - **Enclosure**: a parametric two-part OpenSCAD case with panel cutouts (USB-C, 2× 3.5 mm jacks,
   button, LED pipe) — `hardware/enclosure/muninn_case.scad` + [`hardware/ENCLOSURE.md`](../hardware/ENCLOSURE.md).
 
-## M4 — Alternate front-ends (optional)
+## M4 — Bluetooth A2DP-sink capture (Ceryce's real setup)
 
-Thanks to `AudioSource`, other capture sources can be added without touching the pipeline:
+Ceryce taps a **work laptop** (no software can be installed on it) and transcribes on a **desktop**.
+Her mixer sums both computers to one analog output → splitter → wired headphones ‖ 1Mii B03+. So the
+capture point is the **B03+'s Bluetooth transmit**: Muninn pairs as a silent A2DP **sink**, receives
+the full mixer mix (already digital), and forwards it to the desktop — no ADC, no analog round-trip.
+(Windows can't natively act as an A2DP sink, so this bridge does a job the desktop can't do alone.)
 
-- **On-board mic** board (I²S MEMS) for a standalone room recorder.
-- **USB-audio tap** for a purely digital capture from a computer.
+- **M4a — firmware** ✅ (code; pending hardware): `a2dp_sink_source` on the **original ESP32**
+  (`env:esp32`; the S3 has no Classic BT). Silent sink (no DAC — you monitor on wired headphones);
+  SBC→PCM → `dsp::resample_linear_mono` to 16 kHz → USB-CDC to the desktop. New chip, same protocol/
+  transport/listener.
+- **M4b — listener**: capture the **desktop webcam mic** as the voice channel, align it with the
+  incoming program stream, and reuse the You/Program diarization + writer.
 
-## Notes
+## M5 — Other front-ends (optional, later)
 
-- Muninn is a **side-chain** device — it is never in your monitoring path. Bluetooth monitoring is
-  handled by your existing gear (e.g. the 1Mii B03), so there is no Bluetooth audio relay in scope.
-- The chip is the **ESP32-S3** throughout (native USB + Wi-Fi + PSRAM). No original-ESP32 Classic-BT
-  path is needed for this design.
+Thanks to `AudioSource`: on-board I²S mic (standalone recorder), USB-audio tap, model-based
+diarization for single-channel sources.
+
+## Chip note
+
+The **S3 line-in path** (M1–M3) and the **original-ESP32 A2DP path** (M4) are different chips: the S3
+has native USB + Wi-Fi but **no Classic Bluetooth**; A2DP sink needs the original ESP32. The shared
+`AudioSource`/protocol/listener let both coexist — pick the front-end per how you're tapping.
